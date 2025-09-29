@@ -9,8 +9,11 @@ import serveses.impl.PaymentServiceImpl;
 import serveses.impl.SubscriptionServiceImpl;
 import util.ValidationUtils;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Scanner;
 
@@ -45,8 +48,7 @@ public class ConsoleUI {
                     default: System.out.println("Unknown option");
                 }
             } catch (Exception e) {
-                System.out.println("Error: " + e.getMessage());
-                e.printStackTrace(System.out);
+                System.out.println("Error: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
             }
         }
         sc.close();
@@ -69,18 +71,15 @@ public class ConsoleUI {
     private void createSubscription() throws Exception {
         System.out.print("Service name: ");
         String name = sc.nextLine().trim();
-        System.out.print("Price (e.g. 9.99): ");
-        double price = Double.parseDouble(sc.nextLine().trim());
+    double price = readDouble("Price (e.g. 9.99): ");
         LocalDateTime start = LocalDateTime.now();
-        System.out.print("End date (YYYY-MM-DDTHH:MM) or empty: ");
-        String endStr = sc.nextLine().trim();
-        LocalDateTime end = endStr.isEmpty() ? null : LocalDateTime.parse(endStr);
-        System.out.print("Type (1=Fixed, 2=Flexible): ");
-        String type = sc.nextLine().trim();
+    System.out.print("End date (YYYY-MM-DD or YYYY-MM-DDTHH:MM) or empty: ");
+    String endStr = sc.nextLine().trim();
+    LocalDateTime end = endStr.isEmpty() ? null : parseFlexibleDateTime(endStr);
+    String type = readChoice("Type (1=Fixed, 2=Flexible): ", new String[]{"1","2"});
         Subscription s;
         if ("1".equals(type)) {
-            System.out.print("Months engaged (int): ");
-            int months = Integer.parseInt(sc.nextLine().trim());
+            int months = readInt("Months engaged (int): ");
             s = new FixedSubscription(null, name, price, start, end, Sstatus.ACTIVE, months);
         } else {
             s = new FlexibleSubscription(null, name, price, start, end, Sstatus.ACTIVE);
@@ -100,25 +99,22 @@ public class ConsoleUI {
     }
 
     private void generatePayments() throws Exception {
-        System.out.print("Subscription id: ");
-        String id = sc.nextLine().trim();
+    String id = readNonEmpty("Subscription id: ");
         subscriptionService.generateMonthlyPaymentsForSubscription(id);
         System.out.println("Payments generated (if any).");
     }
 
     private void createPaymentRecord() throws Exception {
-        System.out.print("Subscription id: ");
-        String sid = sc.nextLine().trim();
-        System.out.print("Due date (YYYY-MM-DDTHH:MM): ");
-        LocalDateTime due = LocalDateTime.parse(sc.nextLine().trim());
+    String sid = readNonEmpty("Subscription id: ");
+        System.out.print("Due date (YYYY-MM-DD or YYYY-MM-DDTHH:MM): ");
+        LocalDateTime due = readFlexibleDateTime();
         Payment p = new Payment(null, due, null, "manual", Pstatus.UNPAID, sid);
         paymentService.recordPayment(p);
         System.out.println("Payment record created: " + p.getId());
     }
 
     private void listPaymentsForSubscription() throws Exception {
-        System.out.print("Subscription id: ");
-        String sid = sc.nextLine().trim();
+    String sid = readNonEmpty("Subscription id: ");
         List<Payment> list = paymentService.findBySubscription(sid);
         if (list.isEmpty()) {
             System.out.println("No payments for subscription " + sid);
@@ -128,8 +124,7 @@ public class ConsoleUI {
     }
 
     private void markPaymentPaid() throws Exception {
-        System.out.print("Payment id: ");
-        String pid = sc.nextLine().trim();
+    String pid = readNonEmpty("Payment id: ");
         paymentService.markPaymentAsPaid(pid);
         System.out.println("Payment marked as PAID: " + pid);
     }
@@ -139,8 +134,7 @@ public class ConsoleUI {
         System.out.println("1. Total paid for month");
         System.out.println("2. Total paid for year");
         System.out.println("3. Total unpaid for subscription");
-        System.out.print("choice: ");
-        String c = sc.nextLine().trim();
+    String c = readChoice("choice: ", new String[]{"1","2","3"});
         switch (c) {
             case "1":
                 System.out.print("Month (YYYY-MM): ");
@@ -148,17 +142,96 @@ public class ConsoleUI {
                 System.out.println("Total paid: " + paymentService.totalPaidForMonth(ym));
                 break;
             case "2":
-                System.out.print("Year (YYYY): ");
-                int year = Integer.parseInt(sc.nextLine().trim());
+                int year = readInt("Year (YYYY): ");
                 System.out.println("Total paid: " + paymentService.totalPaidForYear(year));
                 break;
             case "3":
-                System.out.print("Subscription id: ");
-                String sid = sc.nextLine().trim();
+                String sid = readNonEmpty("Subscription id: ");
                 System.out.println("Total unpaid: " + paymentService.totalUnpaidForSubscription(sid));
                 break;
             default:
                 System.out.println("Unknown option");
+        }
+    }
+
+    // --- Helper methods for date parsing ---
+    private LocalDateTime readFlexibleDateTime() {
+        while (true) {
+            String s = sc.nextLine().trim();
+            if (s.isEmpty()) {
+                System.out.print("Please enter a date (YYYY-MM-DD or YYYY-MM-DDTHH:MM): ");
+                continue;
+            }
+            try {
+                return parseFlexibleDateTime(s);
+            } catch (Exception ex) {
+                System.out.print("Invalid date. Use YYYY-MM-DD or YYYY-MM-DDTHH:MM: ");
+            }
+        }
+    }
+
+    private LocalDateTime parseFlexibleDateTime(String input) {
+        String s = input.trim();
+        DateTimeFormatter[] fmts = new DateTimeFormatter[] {
+                DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"),
+                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+        };
+        for (DateTimeFormatter fmt : fmts) {
+            try {
+                return LocalDateTime.parse(s, fmt);
+            } catch (DateTimeParseException ignored) { }
+        }
+        // Try date-only -> default time 00:00
+        try {
+            LocalDate d = LocalDate.parse(s, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            return d.atStartOfDay();
+        } catch (DateTimeParseException ex) {
+            throw ex;
+        }
+    }
+
+    // --- General input helpers ---
+    private String readNonEmpty(String prompt) {
+        while (true) {
+            System.out.print(prompt);
+            String s = sc.nextLine().trim();
+            if (!s.isEmpty()) return s;
+            System.out.println("Value cannot be empty.");
+        }
+    }
+
+    private int readInt(String prompt) {
+        while (true) {
+            System.out.print(prompt);
+            String s = sc.nextLine().trim();
+            try {
+                return Integer.parseInt(s);
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid number. Please enter an integer.");
+            }
+        }
+    }
+
+    private double readDouble(String prompt) {
+        while (true) {
+            System.out.print(prompt);
+            String s = sc.nextLine().trim();
+            try {
+                return Double.parseDouble(s);
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid number. Please enter a decimal value like 9.99.");
+            }
+        }
+    }
+
+    private String readChoice(String prompt, String[] allowed) {
+        while (true) {
+            System.out.print(prompt);
+            String s = sc.nextLine().trim();
+            for (String a : allowed) {
+                if (a.equalsIgnoreCase(s)) return s;
+            }
+            System.out.println("Invalid choice. Allowed: " + String.join(", ", allowed));
         }
     }
 }
