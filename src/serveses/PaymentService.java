@@ -20,4 +20,5 @@ public interface PaymentService {
     double totalPaidForYear(int year) throws Exception;
 
     void markPaymentAsPaid(String paymentId) throws Exception;
+    void delete(String paymentId) throws Exception;
 }

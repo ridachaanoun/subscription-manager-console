@@ -116,4 +116,11 @@ public class PaymentServiceImpl implements PaymentService {
         p.setStatus(Pstatus.PAID);
         paymentDAO.update(p);
     }
+
+    @Override
+    public void delete(String paymentId) throws Exception {
+        Optional<Payment> opt = paymentDAO.findById(paymentId);
+        if (!opt.isPresent()) throw new IllegalArgumentException("Payment not found: " + paymentId);
+        paymentDAO.delete(paymentId);
+    }
 }

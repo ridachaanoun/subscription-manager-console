@@ -65,21 +65,17 @@ public class SubscriptionDAOImpl implements SubscriptionDAO {
     @Override
     public void update(Subscription s) throws Exception {
         String sql = "UPDATE subscription SET service_name=?, price=?, start_date=?, end_date=?, status=?, type=?, months_engaged=? WHERE id=?";
-        try (Connection conn = DBConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+        try(Connection conn = DBConnection.getConnection();
+         PreparedStatement ps = conn.prepareStatement(sql);){
+
             ps.setString(1, s.getServiceName());
             ps.setDouble(2, s.getPrice());
-            ps.setTimestamp(3, Timestamp.valueOf(s.getStartDate()));
-            if (s.getEndDate() != null) ps.setTimestamp(4, Timestamp.valueOf(s.getEndDate())); else ps.setNull(4, Types.TIMESTAMP);
-            ps.setString(5, s.getStatus().name());
-            ps.setString(6, s.getClass().getSimpleName());
-            if (s instanceof FixedSubscription) {
-                ps.setInt(7, ((FixedSubscription) s).getMonthsEngaged());
-            } else {
-                ps.setNull(7, Types.INTEGER);
-            }
-            ps.setString(8, s.getId());
-            ps.executeUpdate();
+            ps.setTimestamp(3, Timestamp.valueOf(s.getEndDate()));
+            
+            if (s.getEndDate() != null) ps.setTimestamp(4, Timestamp.valueOf(s.getEndDate())); else ps.setNull(4, Types.TIMESTAMP); 
+
+
+
         }
     }
 
